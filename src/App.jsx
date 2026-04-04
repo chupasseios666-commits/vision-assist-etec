@@ -1,20 +1,21 @@
 import { useState, useRef } from 'react'
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
+
 function App() {
   const [imagem, setImagem] = useState(null);
   const [imagemBase64, setImagemBase64] = useState(null);
   const [resultado, setResultado] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [bloqueio, setBloqueio] = useState(false);
-  
+
   // ACESSIBILIDADE
   const [velocidade, setVelocidade] = useState(1.0);
   const [altoContraste, setAltoContraste] = useState(false);
   const [historico, setHistorico] = useState([]);
 
   const fileInputRef = useRef(null);
-  const API_KEY = import.meta.env.VITE_GEMINI_KEY; 
+  const API_KEY = import.meta.env.VITE_GEMINI_KEY;
 
   const pararAudio = () => { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); };
 
@@ -60,7 +61,15 @@ function App() {
       falarTexto(texto);
       setHistorico(prev => [texto, ...prev].slice(0, 3));
     } catch (e) {
-      setResultado("ERRO NA CONEXÃO. TENTE NOVAMENTE.");
+      console.error("Erro na análise:", e);
+
+      if (e.message?.includes("503") || e.message?.includes("overloaded")) {
+        setResultado("O SERVIÇO DE IA ESTÁ SOBRECARREGADO NO MOMENTO. POR FAVOR, AGUARDE ALGUNS SEGUNDOS E TENTE NOVAMENTE.");
+      } else if (e.message?.includes("429")) {
+        setResultado("LIMITE DE REQUISIÇÕES ATINGIDO. AGUARDE UM MOMENTO PARA NOVA ANÁLISE.");
+      } else {
+        setResultado("OCORREU UMA INSTABILIDADE NO PROCESSAMENTO DA IA. TENTE NOVAMENTE EM INSTANTES.");
+      }
     } finally {
       setCarregando(false);
       setBloqueio(true);
@@ -84,13 +93,13 @@ function App() {
       <div className={`w-full max-w-2xl p-6 rounded-3xl mb-8 flex flex-wrap items-center justify-between gap-6 ${tema.card}`}>
         <div className="flex flex-col gap-2">
           <label className="text-xs font-black uppercase">Velocidade da Voz: {velocidade}x</label>
-          <input 
-            type="range" min="0.5" max="2" step="0.1" value={velocidade} 
+          <input
+            type="range" min="0.5" max="2" step="0.1" value={velocidade}
             onChange={(e) => setVelocidade(parseFloat(e.target.value))}
             className="w-48 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
           />
         </div>
-        <button 
+        <button
           onClick={() => setAltoContraste(!altoContraste)}
           className={`px-6 py-3 rounded-xl font-black text-xs uppercase border-2 ${altoContraste ? 'bg-yellow-400 text-black border-yellow-400' : 'bg-slate-900 text-white border-slate-900'}`}
         >
@@ -99,20 +108,31 @@ function App() {
       </div>
 
       {/* TÍTULO CENTRALIZADO */}
-      <header className="mb-10 text-center">
-        <h1 className={`text-6xl font-black uppercase tracking-tighter italic ${altoContraste ? 'text-yellow-400' : 'text-blue-800'}`}>
-          Vision Assist
-        </h1>
-        <p className="text-lg font-bold opacity-60 uppercase tracking-widest mt-2">Tecnologia Assistiva Inteligente</p>
+      <header className="mb-10 text-center flex flex-col items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-center gap-6">
+          <img
+            src="/logo.png"
+            alt="Logo Vision Assist: Olho estilizado com conexões de IA"
+            className="w-28 h-28 md:w-36 md:h-36 object-contain"
+          />
+          <div className="text-center sm:text-left">
+            <h1 className={`text-5xl md:text-7xl font-black uppercase tracking-tighter italic leading-none ${altoContraste ? 'text-yellow-400' : 'text-blue-800'}`}>
+              Vision<br />Assist
+            </h1>
+          </div>
+        </div>
+        <p className="text-lg font-bold opacity-60 uppercase tracking-[0.3em] -mt-4">
+          Tecnologia Assistiva Inteligente
+        </p>
       </header>
 
       {/* CARD PRINCIPAL */}
       <main className={`w-full max-w-2xl rounded-[3rem] overflow-hidden ${tema.card}`}>
-        
+
         {/* ÁREA DE UPLOAD */}
         <div className={`p-8 border-b-2 ${altoContraste ? 'border-yellow-400 bg-black' : 'border-slate-100 bg-slate-50'}`}>
           <label className="block text-xs font-black mb-4 uppercase opacity-60 tracking-widest">1. Carregar imagem do objeto:</label>
-          <button 
+          <button
             onClick={() => fileInputRef.current.click()}
             className={`w-full h-24 rounded-2xl border-4 border-dashed flex items-center justify-center transition-all active:scale-95 ${altoContraste ? 'border-yellow-400' : 'border-blue-300 bg-blue-50'}`}
           >
@@ -143,7 +163,7 @@ function App() {
               <p className="text-3xl md:text-4xl font-black leading-tight uppercase italic break-words mb-8">
                 {resultado || "Aguardando entrada de imagem..."}
               </p>
-              
+
               {resultado && (
                 <div className="flex flex-col sm:flex-row gap-4">
                   <button onClick={() => falarTexto(resultado)} className={`flex-1 p-6 rounded-2xl font-black text-xl uppercase flex items-center justify-center gap-3 active:scale-95 ${altoContraste ? 'bg-yellow-400 text-black' : 'bg-slate-800 text-white'}`}>
@@ -160,14 +180,13 @@ function App() {
 
         {/* BOTÃO PRINCIPAL DE AÇÃO */}
         <div className="p-8 pt-0">
-          <button 
+          <button
             onClick={analisarImagem}
             disabled={carregando || !imagemBase64 || bloqueio}
-            className={`w-full py-10 rounded-[2.5rem] font-black text-4xl uppercase transition-all shadow-2xl ${
-              carregando || !imagemBase64 || bloqueio
-              ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60' 
+            className={`w-full py-10 rounded-[2.5rem] font-black text-4xl uppercase transition-all shadow-2xl ${carregando || !imagemBase64 || bloqueio
+              ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-60'
               : `${tema.botao} hover:scale-[1.02] active:scale-95`
-            }`}
+              }`}
           >
             {bloqueio ? "Aguarde..." : "Analisar Agora"}
           </button>
